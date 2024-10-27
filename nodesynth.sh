@@ -36,6 +36,26 @@ EL_RPC_ENDPOINT="${EL_IP_ADDRESS}:${EL_RPC_PORT}"
 _platform=$(get_platform)
 _arch=$(get_arch)
 
+showPrompt(){
+  local back_action="${1:-break}";
+
+  CHOICE=$(
+    whiptail --clear --cancel-button "$CANCEL_BUTTON" \
+    --backtitle "" \
+    --title "$TITLE" \
+    --menu "$MENU" \
+    0 0 0 \
+    "${OPTIONS[@]}" \
+    3>&1 1>&2 2>&3
+  )
+  if [ $? -gt 0 ]; then # user pressed <Cancel> button
+    eval $back_action
+    # back_action ;
+  fi
+  # return via using echo
+  echo $CHOICE
+}
+
 menuMain(){
 
 # Define the options for the main menu
@@ -1014,10 +1034,43 @@ function checkV1StakingSetup(){
 
 # If no consensus client service is installed, ask to install
 function askInstallNode(){
+  ethereumInstall(){
+    local TITLE="Install Node"
+    local MENU="Select Execution and Consensus client to install"
+    local CANCEL_BUTTON="Back"
+    local OPTIONS=(
+      1  "Nimbus CL & Nethermind EL"
+    )
+    local CHOICE=$(showPrompt "askInstallNode")
+    case $CHOICE in 
+      1) 
+        runScript install-nimbus-nethermind.sh true;
+        ;;
+    esac
+  }
+
   if [[ ! -f /etc/systemd/system/consensus.service && ! -f /etc/systemd/system/validator.service ]]; then
-    if whiptail --title "Install Node" --yesno "Would you like to install an Ethereum node (Nimbus CL & Nethermind EL)?" 8 78; then
-      runScript install-nimbus-nethermind.sh true
-    fi
+    local OPTIONS=(
+      1 "Ethereum"
+      2 "Gnosis"
+    )
+
+    local TITLE="Install Node"
+    local MENU="Select Blockchain Environment to Setup"
+    local CANCEL_BUTTON="Back"
+
+    local CHOICE=$(showPrompt)
+    
+    # Handle user's choice
+    case $CHOICE in 
+      1) 
+        ethereumInstall;
+        ;;
+      2)
+        echo "Not Implemented, going to mainmenu";
+        sleep 2;
+        ;;
+    esac
   fi
 }
 
