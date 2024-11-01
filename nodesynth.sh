@@ -35,6 +35,7 @@ EL_RPC_ENDPOINT="${EL_IP_ADDRESS}:${EL_RPC_PORT}"
 # Get machine info
 _platform=$(get_platform)
 _arch=$(get_arch)
+CLIENTS_INSTALL_PATH="clients/install.sh"
 
 showPrompt(){
   local back_action="${1:-break}";
@@ -52,7 +53,7 @@ showPrompt(){
     eval $back_action
     # back_action ;
   fi
-  # return via using echo
+  # return using echo
   echo $CHOICE
 }
 
@@ -525,7 +526,7 @@ while true; do
       22)
         if whiptail --title "Switch Networks" --defaultno --yesno "Are you sure you want to switch networks?\nAll current node data will be removed." 9 78; then
            if runScript uninstall.sh; then
-              runScript install-nimbus-nethermind.sh true
+              runScript $CLIENTS_INSTALL_PATH true nimbus-nethermind
               whiptail --title "Switch Networks" --msgbox "Completed network switching process." 8 78
            fi
         fi
@@ -1035,16 +1036,27 @@ function checkV1StakingSetup(){
 # If no consensus client service is installed, ask to install
 function askInstallNode(){
   ethereumInstall(){
-    local TITLE="Install Node"
-    local MENU="Select Execution and Consensus client to install"
-    local CANCEL_BUTTON="Back"
+    local MENU="Select Execution and Consensus clients to install"
     local OPTIONS=(
       1  "Nimbus CL & Nethermind EL"
     )
     local CHOICE=$(showPrompt "askInstallNode")
     case $CHOICE in 
       1) 
-        runScript install-nimbus-nethermind.sh true;
+        runScript $CLIENTS_INSTALL_PATH true nimbus-nethermind;
+        ;;
+    esac
+  }
+
+  gnosisInstall(){
+    local MENU="Select Execution and Consensus clients to install"
+    local OPTIONS=(
+      1  "Lighthouse CL & Nethermind EL"
+    )
+    local CHOICE=$(showPrompt "askInstallNode")
+    case $CHOICE in 
+      1) 
+        runScript $CLIENTS_INSTALL_PATH true nimbus-nethermind;
         ;;
     esac
   }
@@ -1055,7 +1067,7 @@ function askInstallNode(){
       2 "Gnosis"
     )
 
-    local TITLE="Install Node"
+    TITLE="Install Node"
     local MENU="Select Blockchain Environment to Setup"
     local CANCEL_BUTTON="Back"
 
@@ -1067,8 +1079,7 @@ function askInstallNode(){
         ethereumInstall;
         ;;
       2)
-        echo "Not Implemented, going to mainmenu";
-        sleep 2;
+        gnosisInstall;
         ;;
     esac
   fi

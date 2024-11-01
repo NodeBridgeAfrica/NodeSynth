@@ -14,6 +14,13 @@ set -o history -o histexpand
 
 python="python3"
 
+# Declare an associative array
+declare -A clients
+
+clients["nimbus-nethermind"]="clients/nimbus-nethermind.py"
+
+client=${2}
+
 skip_prompt="${1:-false}"
 
 abort() {
@@ -129,9 +136,11 @@ linux_install_validator-install() {
     mkdir -p ~/git/nodesynth
     git clone https://github.com/nodebridgeafrica/nodesynth.git ~/git/nodesynth 2> /dev/null || (cd ~/git/nodesynth ; git fetch origin main ; git checkout main ; git pull)
     ohai "Installing validator-install"
-    $python ~/git/nodesynth/deploy-nimbus-nethermind.py
+    echo "${clients[$client]}"
+    $python ${clients[$client]}
     ohai "Allowing user to view journalctl logs"
     sudo usermod -a -G systemd-journal $USER
+    wait_for_user
     ohai "Install complete!"
     exit_on_error $?
 }
