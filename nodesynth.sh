@@ -526,7 +526,7 @@ while true; do
       22)
         if whiptail --title "Switch Networks" --defaultno --yesno "Are you sure you want to switch networks?\nAll current node data will be removed." 9 78; then
            if runScript uninstall.sh; then
-              runScript $CLIENTS_INSTALL_PATH true nimbus-nethermind
+              runScript $CLIENTS_INSTALL_PATH true eth-nimbus-nethermind
               whiptail --title "Switch Networks" --msgbox "Completed network switching process." 8 78
            fi
         fi
@@ -1043,7 +1043,7 @@ function askInstallNode(){
     local CHOICE=$(showPrompt "askInstallNode")
     case $CHOICE in 
       1) 
-        runScript $CLIENTS_INSTALL_PATH true nimbus-nethermind;
+        runScript $CLIENTS_INSTALL_PATH true eth-nimbus-nethermind;
         ;;
     esac
   }
@@ -1056,7 +1056,7 @@ function askInstallNode(){
     local CHOICE=$(showPrompt "askInstallNode")
     case $CHOICE in 
       1) 
-        runScript $CLIENTS_INSTALL_PATH true nimbus-nethermind;
+        runScript $CLIENTS_INSTALL_PATH true gnosis-nethermind-lighthouse;
         ;;
     esac
   }

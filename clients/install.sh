@@ -17,7 +17,8 @@ python="python3"
 # Declare an associative array
 declare -A clients
 
-clients["nimbus-nethermind"]="clients/nimbus-nethermind.py"
+clients["eth-nimbus-nethermind"]="clients/eth-nimbus-nethermind.py"
+clients["gnosis-nethermind-lighthouse"]="clients/gnosis-nethermind-lighthouse.py"
 
 client=${2}
 
@@ -133,14 +134,12 @@ linux_update_pip() {
 
 linux_install_validator-install() {
     ohai "Cloning nodesynth into ~/git/nodesynth"
-    mkdir -p ~/git/nodesynth
-    git clone https://github.com/nodebridgeafrica/nodesynth.git ~/git/nodesynth 2> /dev/null || (cd ~/git/nodesynth ; git fetch origin main ; git checkout main ; git pull)
+    # mkdir -p ~/git/nodesynth
+    # git clone https://github.com/nodebridgeafrica/nodesynth.git ~/git/nodesynth 2> /dev/null || (cd ~/git/nodesynth ; git fetch origin main ; git checkout main ; git pull)
     ohai "Installing validator-install"
-    echo "${clients[$client]}"
     $python ${clients[$client]}
     ohai "Allowing user to view journalctl logs"
     sudo usermod -a -G systemd-journal $USER
-    wait_for_user
     ohai "Install complete!"
     exit_on_error $?
 }
@@ -169,7 +168,7 @@ if [[ "$OS" == "Linux" ]]; then
                                    - Deploy a node, in a flash
                                    - nodebridge.africa
     """
-    ohai "This script will install a Nimbus-Nethermind Ethereum node:"
+    ohai "This script will install a node with both Execution and Consensus clients:"
     echo "git jq curl ccze tmux bc"
     echo "python3-tk python3-pip python3-venv"
     echo "validator-install"
