@@ -14,10 +14,15 @@ set -o history -o histexpand
 
 python="python3"
 
-skip_prompt=""
-if [[ $# -eq 1 ]]; then
-   skip_prompt="$1"
-fi
+# Declare an associative array
+declare -A clients
+
+clients["eth-nimbus-nethermind"]="clients/eth-nimbus-nethermind.py"
+clients["gnosis-nethermind-lighthouse"]="clients/gnosis-nethermind-lighthouse.py"
+
+client=${2}
+
+skip_prompt="${1:-false}"
 
 abort() {
   printf "%s\n" "$1"
@@ -129,10 +134,10 @@ linux_update_pip() {
 
 linux_install_validator-install() {
     ohai "Cloning nodesynth into ~/git/nodesynth"
-    mkdir -p ~/git/nodesynth
-    git clone https://github.com/nodebridgeafrica/nodesynth.git ~/git/nodesynth 2> /dev/null || (cd ~/git/nodesynth ; git fetch origin main ; git checkout main ; git pull)
+    # mkdir -p ~/git/nodesynth
+    # git clone https://github.com/nodebridgeafrica/nodesynth.git ~/git/nodesynth 2> /dev/null || (cd ~/git/nodesynth ; git fetch origin main ; git checkout main ; git pull)
     ohai "Installing validator-install"
-    $python ~/git/nodesynth/deploy-nimbus-nethermind.py
+    $python ${clients[$client]}
     ohai "Allowing user to view journalctl logs"
     sudo usermod -a -G systemd-journal $USER
     ohai "Install complete!"
@@ -146,13 +151,13 @@ requirements_check
 OS="$(uname)"
 if [[ "$OS" == "Linux" ]]; then
     echo """
-██╗   ██╗ █████╗ ██╗     ██╗██████╗  █████╗ ████████╗ ██████╗ ██████╗ 
-██║   ██║██╔══██╗██║     ██║██╔══██╗██╔══██╗╚══██╔══╝██╔═══██╗██╔══██╗
-██║   ██║███████║██║     ██║██║  ██║███████║   ██║   ██║   ██║██████╔╝
-╚██╗ ██╔╝██╔══██║██║     ██║██║  ██║██╔══██║   ██║   ██║   ██║██╔══██╗
- ╚████╔╝ ██║  ██║███████╗██║██████╔╝██║  ██║   ██║   ╚██████╔╝██║  ██║
-  ╚═══╝  ╚═╝  ╚═╝╚══════╝╚═╝╚═════╝ ╚═╝  ╚═╝   ╚═╝    ╚═════╝ ╚═╝  ╚═╝
-                                                                      
+███╗   ██╗ ██████╗ ██████╗ ███████╗
+████╗  ██║██╔═══██╗██╔══██╗██╔════╝
+██╔██╗ ██║██║   ██║██║  ██║█████╗  
+██║╚██╗██║██║   ██║██║  ██║██╔══╝  
+██║ ╚████║╚██████╔╝██████╔╝███████╗
+╚═╝  ╚═══╝ ╚═════╝ ╚═════╝ ╚══════╝
+                                   
 ██╗███╗   ██╗███████╗████████╗ █████╗ ██╗     ██╗                     
 ██║████╗  ██║██╔════╝╚══██╔══╝██╔══██╗██║     ██║                     
 ██║██╔██╗ ██║███████╗   ██║   ███████║██║     ██║                     
@@ -163,12 +168,12 @@ if [[ "$OS" == "Linux" ]]; then
                                    - Deploy a node, in a flash
                                    - nodebridge.africa
     """
-    ohai "This script will install a Nimbus-Nethermind Ethereum node:"
+    ohai "This script will install a node with both Execution and Consensus clients:"
     echo "git jq curl ccze tmux bc"
     echo "python3-tk python3-pip python3-venv"
     echo "validator-install"
 
-    if [[ -z $skip_prompt ]]; then wait_for_user; fi
+    if [[ "$skip_prompt" != true ]]; then wait_for_user; fi
     linux_install_pre
     linux_install_python
     linux_update_pip

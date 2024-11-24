@@ -13,31 +13,17 @@
 
 import os
 import requests
-import re
-import fnmatch
 import random
-import json
 import tarfile
-import shutil
 import subprocess
-import tempfile
-import urllib.request
-import zipfile
 import random
 import sys
-import platform
 from consolemenu import *
 from consolemenu.items import *
 import argparse
-from dotenv import load_dotenv, dotenv_values
+from utils import *
 
 import os
-
-def clear_screen():
-    if os.name == 'posix':  # Unix-based systems (e.g., Linux, macOS)
-        os.system('clear')
-    elif os.name == 'nt':   # Windows
-        os.system('cls')
 
 clear_screen()  # Call the function to clear the screen
 
@@ -97,8 +83,6 @@ sepolia_sync_urls = [
     ("EF DevOps", "https://checkpoint-sync.sepolia.ethpandaops.io"),
 ]
 
-# Load environment variables from env file
-load_dotenv("env")
 
 # Set options to parsed arguments
 EL_P2P_PORT=os.getenv('EL_P2P_PORT')
@@ -136,43 +120,17 @@ parser.add_argument("-v", "--version", action="version", version="%(prog)s 1.0.0
 args = parser.parse_args()
 #print(args)
 
-def get_machine_architecture():
-  machine_arch=platform.machine()
-  if machine_arch == "x86_64":
-    return "amd64"
-  elif machine_arch == "aarch64":
-    return "arm64"
-  else:
-    print(f'Unsupported machine architecture: {machine_arch}')
-    exit(1)
-
-def get_computer_platform():
-  platform_name=platform.system()
-  if platform_name == "Linux":
-    return platform_name
-  else:
-    print(f'Unsupported platform: {platform_name}')
-    exit(1)
-
 binary_arch=get_machine_architecture()
 platform_arch=get_computer_platform()
 
 # Change to the home folder
 os.chdir(os.path.expanduser("~"))
 
-if not args.network and not args.skip_prompts:
-    # Ask the user for Ethereum network
-    index = SelectionMenu.get_selection(valid_networks,title='Validator Install Quickstart :: nodebridge.africa',subtitle='Installs Nethermind EL / Nimbus BN / Nimbus VC / MEVboost\nSelect Ethereum network:')
-
-    # Exit selected
-    if index == 3:
-        exit(0)
-
-    # Set network
-    eth_network=valid_networks[index]
-    eth_network=eth_network.lower()
-else:
-    eth_network=args.network.lower()
+eth_network = select_network(
+    args=args,
+    networks=valid_networks,
+    subtitle='Installs Nethermind EL / Nimbus BN / Nimbus VC / MEVboost\nSelect Ethereum network:'
+)
 
 if not args.install_config and not args.skip_prompts:
     # Sepolia can only be full node
@@ -241,11 +199,6 @@ consensus_client = valid_consensus_clients[0]
 consensus_client = consensus_client.lower()
 
 
-# Validates an eth address
-def is_valid_eth_address(address):
-    pattern = re.compile("^0x[a-fA-F0-9]{40}$")
-    return bool(pattern.match(address))
-
 # Set FEE_RECIPIENT_ADDRESS
 if not NODE_ONLY and FEE_RECIPIENT_ADDRESS == "" and not args.skip_prompts:
     # Prompt User for validator tips address
@@ -256,7 +209,6 @@ if not NODE_ONLY and FEE_RECIPIENT_ADDRESS == "" and not args.skip_prompts:
             break
         else:
             print("Invalid Ethereum address. Try again.")
-
 
 # Validates an CL beacon node address with port
 def validate_beacon_node_address(ip_port):
@@ -315,24 +267,6 @@ sync_url = random.choice(sync_urls)[1]
 if not VALIDATOR_ONLY:
     print(f'Using Sync URL: {sync_url}')
 
-def setup_node():
-    if not VALIDATOR_ONLY:
-        # Create JWT directory
-        subprocess.run([f'sudo mkdir -p $(dirname {JWTSECRET_PATH})'], shell=True)
-
-        # Generate random hex string and save to file
-        rand_hex = subprocess.run(['openssl', 'rand', '-hex', '32'], stdout=subprocess.PIPE)
-        subprocess.run([f'sudo tee {JWTSECRET_PATH}'], input=rand_hex.stdout, stdout=subprocess.DEVNULL, shell=True)
-
-    # Update and upgrade packages
-    subprocess.run(['sudo', 'apt', '-y', '-qq', 'update'])
-    subprocess.run(['sudo', 'apt', '-y', '-qq', 'upgrade'])
-
-    # Autoremove packages
-    subprocess.run(['sudo', 'apt', '-y', '-qq' , 'autoremove'])
-
-    # Chrony timesync package
-    subprocess.run(['sudo', 'apt', '-y', '-qq', 'install', 'chrony'])
 
 def install_mevboost():
     if MEVBOOST_ENABLED == True and not VALIDATOR_ONLY:
@@ -441,116 +375,6 @@ def install_mevboost():
         os.system(f'sudo cp {mev_boost_temp_file} {mev_boost_service_file_path}')
         os.remove(mev_boost_temp_file)
 
-def download_and_install_nethermind():
-    if execution_client == 'nethermind':
-        # Create User and directories
-        subprocess.run(["sudo", "useradd", "--no-create-home", "--shell", "/bin/false", "execution"])
-        subprocess.run(["sudo", "mkdir", "-p", "/var/lib/nethermind"])
-        subprocess.run(["sudo", "chown", "-R", "execution:execution", "/var/lib/nethermind"])
-        subprocess.run(["sudo", "apt-get", '-qq', "install", "libsnappy-dev", "libc6-dev", "libc6", "unzip", "-y"], check=True)
-
-        # Define the Github API endpoint to get the latest release
-        url = 'https://api.github.com/repos/NethermindEth/nethermind/releases/latest'
-
-        # Send a GET request to the API endpoint
-        response = requests.get(url)
-        global nethermind_version
-        nethermind_version = response.json()['tag_name']
-
-        # Adjust binary name
-        if binary_arch == "amd64":
-          _arch="x64"
-        elif binary_arch == "arm64":
-          _arch="arm64"
-        else:
-           print("Error: Unknown binary architecture.")
-           exit(1)
-
-        # Search for the asset with the name that ends in {platform_arch}-{_arch}.zip
-        assets = response.json()['assets']
-        download_url = None
-        zip_filename = None
-        for asset in assets:
-            if asset['name'].endswith(f'{platform_arch.lower()}-{_arch}.zip'):
-                download_url = asset['browser_download_url']
-                zip_filename = asset['name']
-                break
-
-        if download_url is None or zip_filename is None:
-            print("Error: Could not find the download URL for the latest release.")
-            exit(1)
-
-        # Download the latest release binary
-        print(f"Download URL: {download_url}")
-
-        try:
-            # Download the file
-            response = requests.get(download_url, stream=True)
-            response.raise_for_status()  # Raise an exception for HTTP errors
-
-            # Save the binary to a temporary file
-            with tempfile.NamedTemporaryFile('wb', suffix='.zip', delete=False) as temp_file:
-                for chunk in response.iter_content(1024):
-                    if chunk:
-                        temp_file.write(chunk)
-                temp_path = temp_file.name
-
-            print(f">> Successfully downloaded: {zip_filename}")
-
-        except requests.exceptions.RequestException as e:
-            print(f"Error: Unable to download file. Try again later. {e}")
-            exit(1)
-
-        # Create a temporary directory for extraction
-        with tempfile.TemporaryDirectory() as temp_dir:
-            # Extract the binary to the temporary directory
-            with zipfile.ZipFile(temp_path, 'r') as zip_ref:
-                zip_ref.extractall(temp_dir)
-
-            # Copy the contents of the temporary directory to /usr/local/bin/nethermind using sudo
-            subprocess.run(["sudo", "cp", "-a", f"{temp_dir}/.", "/usr/local/bin/nethermind"])
-
-        # chmod a+x /usr/local/bin/nethermind/nethermind and change ownership
-        subprocess.run(["sudo", "chmod", "a+x", "/usr/local/bin/nethermind/nethermind"])
-        subprocess.run(['sudo', 'chown', '-R', 'execution:execution', '/usr/local/bin/nethermind'])
-
-        # Remove the temporary zip file
-        os.remove(temp_path)
-
-        ##### NETHERMIND SERVICE FILE ###########
-        nethermind_service_file = f'''[Unit]
-Description=Nethermind Execution Layer Client service for {eth_network.upper()}
-After=network-online.target
-Wants=network-online.target
-Documentation=https://www.nodebridge.africa
-
-[Service]
-Type=simple
-User=execution
-Group=execution
-Restart=on-failure
-RestartSec=3
-KillSignal=SIGINT
-TimeoutStopSec=900
-WorkingDirectory=/var/lib/nethermind
-Environment="DOTNET_BUNDLE_EXTRACT_BASE_DIR=/var/lib/nethermind"
-ExecStart=/usr/local/bin/nethermind/nethermind --config {eth_network} --datadir="/var/lib/nethermind" --Network.DiscoveryPort {EL_P2P_PORT} --Network.P2PPort {EL_P2P_PORT} --Network.MaxActivePeers {EL_MAX_PEER_COUNT} --JsonRpc.Port {EL_RPC_PORT} --Metrics.Enabled true --Metrics.ExposePort 6060 --JsonRpc.JwtSecretFile {JWTSECRET_PATH} --Pruning.Mode=Hybrid --Pruning.FullPruningTrigger=VolumeFreeSpace --Pruning.FullPruningThresholdMb=300000
-
-[Install]
-WantedBy=multi-user.target
-'''
-
-        nethermind_temp_file = 'execution_temp.service'
-        global nethermind_service_file_path
-        nethermind_service_file_path = '/etc/systemd/system/execution.service'
-
-        with open(nethermind_temp_file, 'w') as f:
-            f.write(nethermind_service_file)
-
-        os.system(f'sudo cp {nethermind_temp_file} {nethermind_service_file_path}')
-
-        os.remove(nethermind_temp_file)
-
 def download_nimbus():
     if consensus_client == 'nimbus':
         # Change to the home folder
@@ -612,7 +436,7 @@ def download_nimbus():
         # Find the extracted folder
         extracted_folder = None
         for item in os.listdir():
-            if item.startswith(f'nimbus-eth2_{platform.system()}_{_arch}'):
+            if item.startswith(f'nimbus-eth2_{platform_arch}_{_arch}'):
                 extracted_folder = item
                 break
 
@@ -830,9 +654,15 @@ def finish_install():
             command = ['nano', '~/git/nodesynth/.env.overrides']
             subprocess.run(command)
 
-setup_node()
+
+pre_setup_client(args, not VALIDATOR_ONLY)
+
 install_mevboost()
-download_and_install_nethermind()
+if execution_client == 'nethermind':
+    nethermind_version, nethermind_service_file_path = download_and_install_nethermind(
+        network=eth_network,
+        command_args=f'--config {eth_network} --datadir="/var/lib/nethermind" --Network.DiscoveryPort {EL_P2P_PORT} --Network.P2PPort {EL_P2P_PORT} --Network.MaxActivePeers {EL_MAX_PEER_COUNT} --JsonRpc.Port {EL_RPC_PORT} --Metrics.Enabled true --Metrics.ExposePort 6060 --JsonRpc.JwtSecretFile {JWTSECRET_PATH} --Pruning.Mode=Hybrid --Pruning.FullPruningTrigger=VolumeFreeSpace --Pruning.FullPruningThresholdMb=300000'
+    )
 download_nimbus()
 install_nimbus()
 run_nimbus_checkpoint_sync()
